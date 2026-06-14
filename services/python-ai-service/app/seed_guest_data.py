@@ -47,9 +47,9 @@ def main():
         # 6. Insert new public documents
         logger.info("Inserting new public documents...")
         doc_records = [
-            ('d1111111-1111-1111-1111-111111111111', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/q3_report.pdf', 'Q3 Financial Report.pdf', 'hash_q3_financial_report', 'INDEXED'),
-            ('d2222222-2222-2222-2222-222222222222', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/roadmap.docx', 'Product Roadmap 2025.docx', 'hash_product_roadmap_2025', 'INDEXED'),
-            ('d3333333-3333-3333-3333-333333333333', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/legal_contract.pdf', 'Legal Contract v2.pdf', 'hash_legal_contract_v2', 'PROCESSING'),
+            ('d1111111-1111-1111-1111-111111111111', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/synthetic_engineering_certification_guide.txt', 'synthetic_engineering_certification_guide.txt', 'hash_engineering_certification_guide', 'INDEXED'),
+            ('d2222222-2222-2222-2222-222222222222', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/synthetic_team_learning_report.txt', 'synthetic_team_learning_report.txt', 'hash_team_learning_report', 'INDEXED'),
+            ('d3333333-3333-3333-3333-333333333333', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/synthetic_workload_insights_report.txt', 'synthetic_workload_insights_report.txt', 'hash_workload_insights_report', 'INDEXED'),
             ('d4444444-4444-4444-4444-444444444444', None, '00000000-0000-0000-0000-000000000000', 'workspaces/00000000-0000-0000-0000-000000000000/eng_spec.txt', 'Engineering Spec v3.txt', 'hash_engineering_spec', 'FAILED')
         ]
         execute_values(cur, """
@@ -57,18 +57,24 @@ def main():
             VALUES %s
         """, doc_records)
         
-        # 7. Set up the text chunks for the two INDEXED documents
+        # 7. Set up the text chunks for the three INDEXED documents
         logger.info("Defining text chunks...")
         doc1_id = 'd1111111-1111-1111-1111-111111111111'
         doc1_chunks = [
-            "The main conclusion of this Q3 financial report is that company operations are highly profitable and sustainable, showing a 24% year-over-year revenue growth due to strong enterprise adoption. Operating income reached a record high of $12.4M.",
-            "Key risks mentioned in the report are supply chain disruption, rising commodity prices, and new European regulatory compliance requirements. Management is actively implementing hedging strategies to mitigate these supply chain and commodity price risks.",
-            "Comparing Q3 vs Q4 performance: Q3 performance was strong with $42M in revenue and a 68% gross margin, while Q4 is projected to grow to $48M in revenue, though with slightly lower operating margins due to increased year-end marketing expenses."
+            "Engineering Certification Enablement Guide (Synthetic)\n\nCloud Engineer:\n- Primary: AZ-204\n- Secondary: AZ-305\n\nDevOps Engineer:\n- Primary: AZ-400",
+            "Recommended Study Pattern:\n- 1-2 hours daily focused study\n- Weekly assessment checkpoints\n- Target 75% practice score before exam"
         ]
         
         doc2_id = 'd2222222-2222-2222-2222-222222222222'
         doc2_chunks = [
-            "Product Roadmap 2025 Details: In Q1 2025, we will release semantic RAG search and WebSockets STOMP presence indicators. In Q2 2025, we will deploy multi-tenant isolation and explainability panels."
+            "Quarterly Learning Performance Summary (Synthetic)\n\nAverage study time: 21 hours\nPass rate: 68%",
+            "Observation:\nLearners with more than 20 study hours and more than 75% on practice scores show stronger certification outcomes."
+        ]
+        
+        doc3_id = 'd3333333-3333-3333-3333-333333333333'
+        doc3_chunks = [
+            "Workload and Learning Correlation (Synthetic)\n\nInsights:\n- Employees with more than 20 meeting hours per week show lower study completion.",
+            "Optimal completion appears when learners have 12-18 meeting hours and at least 15 focus hours.\n\nRecommendation:\nSchedule learning blocks during focus-heavy periods."
         ]
         
         # 8. Load model and compute embeddings
@@ -81,6 +87,8 @@ def main():
             all_chunks.append((doc1_id, text))
         for text in doc2_chunks:
             all_chunks.append((doc2_id, text))
+        for text in doc3_chunks:
+            all_chunks.append((doc3_id, text))
             
         texts_to_embed = [item[1] for item in all_chunks]
         embeddings = model.encode(texts_to_embed)
@@ -112,20 +120,28 @@ def main():
         # Clean old MongoDB parsed contents for guest workspace
         collection.delete_many({"workspace_id": "00000000-0000-0000-0000-000000000000"})
         
-        # Insert Q3 Report parsed contents
+        # Insert Guide parsed contents
         collection.insert_one({
             "doc_id": doc1_id,
-            "filename": "Q3 Financial Report.pdf",
+            "filename": "synthetic_engineering_certification_guide.txt",
             "workspace_id": "00000000-0000-0000-0000-000000000000",
             "chunks": [{"index": i, "text": t} for i, t in enumerate(doc1_chunks)]
         })
         
-        # Insert Roadmap parsed contents
+        # Insert Report parsed contents
         collection.insert_one({
             "doc_id": doc2_id,
-            "filename": "Product Roadmap 2025.docx",
+            "filename": "synthetic_team_learning_report.txt",
             "workspace_id": "00000000-0000-0000-0000-000000000000",
             "chunks": [{"index": i, "text": t} for i, t in enumerate(doc2_chunks)]
+        })
+        
+        # Insert Workload parsed contents
+        collection.insert_one({
+            "doc_id": doc3_id,
+            "filename": "synthetic_workload_insights_report.txt",
+            "workspace_id": "00000000-0000-0000-0000-000000000000",
+            "chunks": [{"index": i, "text": t} for i, t in enumerate(doc3_chunks)]
         })
         
         logger.info("MongoDB seeding completed successfully.")

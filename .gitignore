@@ -104,8 +104,3 @@ lerna-debug.log*
 
 # Local configuration modifications (if any)
 docker-compose.override.yml
-
-# Temporary README exclusions (to be removed after initial push)
-/README.md
-/standalone-rag/README.md
-

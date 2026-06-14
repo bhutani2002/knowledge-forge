@@ -1,0 +1,14 @@
+[
+  {
+    "employee_id": "EMP-001",
+    "meeting_hours_per_week": 22,
+    "focus_hours_per_week": 10,
+    "preferred_learning_slot": "Morning"
+  },
+  {
+    "employee_id": "EMP-002",
+    "meeting_hours_per_week": 15,
+    "focus_hours_per_week": 18,
+    "preferred_learning_slot": "Afternoon"
+  }
+]

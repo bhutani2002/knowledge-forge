@@ -27,9 +27,8 @@ public class ScheduledReportTask {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    // Cron triggers every Sunday at midnight. For testing we also schedule it to run every 5 minutes.
+    // Cron triggers every Sunday at midnight.
     @Scheduled(cron = "0 0 0 * * SUN")
-    @Scheduled(cron = "0 */5 * * * *") // Run every 5 minutes for local testing/verification
     public void generateWeeklyReports() {
         String lockKey = "report:lock:weekly";
         logger.info("Instance {} attempting lock acquisition for weekly report task...", instanceId);

@@ -36,8 +36,8 @@ public class NotificationConsumer {
             mail.setFrom("noreply@knowledgeforge.com");
             mail.setTo("user@knowledgeforge.com"); // Static user for demo
             mail.setSubject("KnowledgeForge - Document Status Update");
-            mail.setText(String.format("Hello,\n\nYour document '%s' (ID: %s) processing status has completed with: %s.\n\nBest regards,\nKnowledgeForge Team",
-                    filename, docId, status));
+            mail.setText(String.format("Hello,\n\nYour document '%s' processing status has completed with: %s.\n\nBest regards,\nKnowledgeForge Team",
+                    filename, status));
             
             mailSender.send(mail);
             logger.info("Email notification successfully sent for document {}", docId);

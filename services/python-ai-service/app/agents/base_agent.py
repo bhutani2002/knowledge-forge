@@ -236,10 +236,10 @@ class LLMRouter:
             LLMProvider("OpenRouter Nvidia Nemotron 3 Super", config.OPENROUTER_API_KEY, "nvidia/nemotron-3-super-120b-a12b:free", "https://openrouter.ai/api/v1"),
             LLMProvider("OpenRouter Gemini Flash", config.OPENROUTER_API_KEY, "google/gemini-2.5-flash", "https://openrouter.ai/api/v1")
         ]
-        # Phi-4 on Foundry endpoint is free/included if endpoint is configured
+        # Dynamic Foundry deployment endpoint if configured
         if config.AZURE_AI_SEARCH_ENDPOINT and config.AZURE_AI_SEARCH_KEY:
             self.final_providers.append(
-                LLMProvider("Foundry Models", config.AZURE_AI_SEARCH_KEY, "phi-4", config.AZURE_AI_SEARCH_ENDPOINT)
+                LLMProvider("Foundry Models", config.AZURE_AI_SEARCH_KEY, config.AZURE_AI_MODEL_DEPLOYMENT_NAME, config.AZURE_AI_SEARCH_ENDPOINT)
             )
 
     def complete(self, messages: list, role: str = "final", stream=False) -> Any:

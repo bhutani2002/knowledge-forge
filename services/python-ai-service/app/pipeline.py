@@ -114,7 +114,7 @@ If the knowledge base doesn't contain the answer, respond with "I don't have tha
         agent = client.agents.create_version(
             agent_name=f"agent-{safe_ws_id}",
             definition=PromptAgentDefinition(
-                model=os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-4o-mini"),
+                model=os.getenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-5-mini"),
                 instructions=instructions,
                 tools=[knowledge_tool]
             )

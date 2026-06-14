@@ -54,12 +54,20 @@ public class NotificationConsumer {
             String reportId = (String) payload.get("report_id");
             String workspaceId = (String) payload.get("workspace_id");
 
+            // Resolve user-friendly workspace display name dynamically from payload
+            String workspaceName = (String) payload.get("workspace_name");
+            if (workspaceName == null || workspaceName.trim().isEmpty()) {
+                workspaceName = "00000000-0000-0000-0000-000000000000".equals(workspaceId)
+                        ? "Public Demo Workspace"
+                        : "Custom Workspace (" + (workspaceId != null && workspaceId.length() >= 8 ? workspaceId.substring(0, 8) : "Active") + ")";
+            }
+
             SimpleMailMessage mail = new SimpleMailMessage();
             mail.setFrom("noreply@knowledgeforge.com");
             mail.setTo("workspace-admin@knowledgeforge.com");
             mail.setSubject("KnowledgeForge - Weekly Intelligence Report");
-            mail.setText(String.format("Hello,\n\nYour weekly intelligence report (ID: %s) for workspace %s has been compiled.\n\nSummary:\n- New documents processed: 12\n- Key topics detected: Distributed Systems, Redis Cache, RAG Pipelines\n- Grounding average score: 96.5%%\n\nBest regards,\nKnowledgeForge Team",
-                    reportId, workspaceId));
+            mail.setText(String.format("Hello,\n\nYour weekly intelligence report has been compiled for workspace: %s.\n\nSummary:\n- New documents processed: 12\n- Key topics detected: Distributed Systems, Redis Cache, RAG Pipelines\n- Grounding average score: 96.5%%\n\nBest regards,\nKnowledgeForge Team",
+                    workspaceName));
             
             mailSender.send(mail);
             logger.info("Weekly Intelligence Report email sent successfully.");

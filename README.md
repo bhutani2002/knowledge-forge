@@ -34,7 +34,7 @@ graph TD
         DocSvc -->|Upload PDF/TXT| MinIO[(MinIO Object Storage / AWS S3)]
         DocSvc -->|Publish Ingestion Event| RabbitMQ[RabbitMQ Ingestion Broker]
         ChatSvc -->|Chat Sessions & Messages| MongoDB[(MongoDB Chat Store)]
-        ChatSvc <-->|Pub/Sub STOMP Sessions| RedisBroker[(Redis STOMP Broker)]
+        ChatSvc -->|Cache Sessions & State| RedisBroker[(Redis Session Store)]
         WkSvc & AuthSvc -->|Relational Data| PostgresSQL[(PostgreSQL Core DB)]
 
         Kafka[Kafka Event Broker] -->|Consume doc.indexed| NotifSvc
@@ -79,8 +79,28 @@ graph TD
 - **Dynamic Hybrid Search & Fallback**: Standard configuration uses Azure AI Search (Microsoft Foundry IQ) for cloud vector search. If the cloud search client encounters network errors, API limits, or configuration issues, the query engine automatically falls back to its local vector retrieval pipeline (PostgreSQL with `pgvector` dense indexes) to ensure uninterrupted service.
 - **Multi-Agent Query Routing**: Supports intelligent routing of user questions to multiple LLMs (Google Gemini 1.5/2.5, Groq Mistral/Llama, OpenRouter models, and ChatGPT models deployed via Microsoft Foundry IQ / Azure AI Projects) with automatic failovers.
 - **Real-time Performance**: Uses throttled WebSocket streaming (limited to 150ms UI updates) to guarantee smooth, freeze-free token rendering inside the browser.
-- **Theme & i18n**: Premium custom UI theme and complete bilingual support (English and Hindi localization) for all headers, dropdowns, welcome screens, and workspaces.
+- **Theme & i18n**: Premium custom UI with complete dark/light mode toggles and bilingual support (English and Hindi localization) for all headers, dropdowns, welcome screens, and workspaces.
+- **Insights Dashboard & Data Export**: A dedicated workspace analytics dashboard displaying document processing statistics, extracted summaries, automated entity tagging, and workload correlation metrics, complete with built-in data export capability.
+- **Model Context Protocol (MCP) Tooling**: Integrates native Model Context Protocol (MCP) standards. Cloud-based LLMs deployed via the Azure AI Projects SDK are configured with an `MCPTool` that calls the FastAPI microservice (`/knowledgebases/{workspace_id}/mcp`) dynamically to fetch vector-grounded text chunks.
 - **Security Scanning & Compliance**: Zero hardcoded secrets. All sensitive keys are loaded strictly from the environment, and credentials in the template `.env.example` are kept generic.
+
+---
+
+## 🤖 Multi-Agent Reasoning Subsystem
+
+The Python AI service (`python-ai-service`) orchestrates a network of 11 specialized, decoupled reasoning agents to handle input validation, query rewrites, context ranking, compliance routing, and response synthesis:
+
+- **Pipeline Orchestrator Agent** (`pipeline_orchestrator_agent.py`): The core supervisor routing engine coordinating execution across all specialized sub-agents.
+- **Input Guardrail Agent** (`input_guardrail_agent.py`): Sanitizes queries, blocks prompt injections/jailbreaks, checks toxicity, and redacts PII (SSNs, cards, phones).
+- **Query Rewriter Agent** (`query_rewriter_agent.py`): Reformulates conversational context into standalone search queries optimized for vector databases.
+- **Multi-Query Retrieval Agent** (`multi_query_retrieval_agent.py`): Generates search variations to maximize vector lookup coverage.
+- **ReRanker Agent** (`reranker_agent.py`): Evaluates retrieved chunks, scoring and sorting them by relevance to drop low-quality contexts.
+- **Context Compressor Agent** (`context_compressor_agent.py`): Compresses and filters retrieved vector contexts to fit token window limits.
+- **Answer Agent** (`answer_agent.py`): Synthesizes the final response using the compressed context and generates citation hooks.
+- **Output Guardrail Agent** (`output_guardrail_agent.py`): Sanitizes generated answers, verifies source citations, and prevents out-of-bounds tags or hallucinations.
+- **Explainability Agent** (`explainability_agent.py`): Generates detailed reasoning diagnostics showing users exactly how their answers were compiled.
+- **Insight Generation Agent** (`insight_generation_agent.py`): Processes newly ingested documents post-upload to extract automated summaries, tags, and key entities.
+- **Report Generation Agent** (`report_generation_agent.py`): Synthesizes tenant workload and focus statistics to compile intelligence reports.
 
 ---
 
@@ -149,18 +169,25 @@ cp .env.example .env
 
 Open the newly created `.env` file and configure the parameters. Below is a detailed mapping of the critical keys:
 
-| Environment Variable     | Description                                  | Source / Local Default                |
-| :----------------------- | :------------------------------------------- | :------------------------------------ |
-| `GEMINI_API_KEY`         | Key for Google Gemini 1.5/2.5 models         | Google AI Studio                      |
-| `GROQ_API_KEY`           | Key for Groq Mistral/Llama models            | Groq Console                          |
-| `OPENROUTER_API_KEY`     | Key for OpenRouter API fallback models       | OpenRouter                            |
-| `JWT_SECRET_KEY`         | HMAC-SHA256 signature key for JWT tokens     | User-defined 32-byte hex string       |
-| `AWS_ACCESS_KEY_ID`      | Access key for local MinIO S3 object storage | User-defined access key               |
-| `AWS_SECRET_ACCESS_KEY`  | Secret key for local MinIO S3 object storage | User-defined secret key               |
-| `AWS_REGION`             | Region parameter for MinIO S3 bucket         | User-defined region                   |
-| `SPRING_MAIL_HOST`       | SMTP server host for notifications           | User-defined SMTP host                |
-| `SPRING_MAIL_PORT`       | SMTP port                                    | User-defined SMTP port                |
-| `SPRING_PROFILES_ACTIVE` | Active profile for Spring Boot microservices | Active profiles (e.g., `prod`, `dev`) |
+| Environment Variable              | Description                                        | Source / Local Default                  |
+| :-------------------------------- | :------------------------------------------------- | :-------------------------------------- |
+| `GEMINI_API_KEY`                  | Key for Google Gemini 1.5/2.5 models               | Google AI Studio                        |
+| `GROQ_API_KEY`                    | Key for Groq Mistral/Llama models                  | Groq Console                            |
+| `OPENROUTER_API_KEY`              | Key for OpenRouter API fallback models             | OpenRouter                              |
+| `GOOGLE_CLIENT_ID`                | Client ID for Google OAuth2 Single Sign-On (SSO)   | Google Cloud Console API Credentials    |
+| `GOOGLE_CLIENT_SECRET`            | Client Secret for Google OAuth2 Single Sign-On     | Google Cloud Console API Credentials    |
+| `JWT_SECRET_KEY`                  | HMAC-SHA256 signature key for JWT tokens           | User-defined 32-byte hex string         |
+| `AWS_ACCESS_KEY_ID`               | Access key for local MinIO S3 object storage       | User-defined access key                 |
+| `AWS_SECRET_ACCESS_KEY`           | Secret key for local MinIO S3 object storage       | User-defined secret key                 |
+| `AWS_REGION`                      | Region parameter for MinIO S3 bucket               | User-defined region                     |
+| `SPRING_MAIL_HOST`                | SMTP server host for notifications                 | User-defined SMTP host                  |
+| `SPRING_MAIL_PORT`                | SMTP port                                          | User-defined SMTP port                  |
+| `SPRING_PROFILES_ACTIVE`          | Active profile for Spring Boot microservices       | Active profiles (e.g., `prod`, `dev`)   |
+| `USE_FOUNDRY_IQ`                  | Toggle to enable Microsoft Foundry IQ cloud search | `true` or `false`                       |
+| `AZURE_AI_SEARCH_ENDPOINT`        | Endpoint URL for Azure AI Search                   | Azure AI Studio / Azure Portal          |
+| `AZURE_AI_SEARCH_KEY`             | Access key for Azure AI Search                     | Azure AI Studio / Azure Portal          |
+| `AZURE_AI_PROJECT_ENDPOINT`       | Endpoint connection string for Azure AI Project   | Azure AI Studio Project Settings        |
+| `AZURE_AI_MODEL_DEPLOYMENT_NAME`  | Name of model deployment (e.g., `gpt-5-mini`)      | Azure AI Studio Deployment Name         |
 
 > [!NOTE]
 > **MinIO & AWS S3 Compatibility**: The object storage configuration is fully compatible with standard S3 protocols. While **MinIO** is used for local offline development, you can replace the credentials and endpoint in `.env` with a production **AWS S3** bucket and credentials without modifying any application code.

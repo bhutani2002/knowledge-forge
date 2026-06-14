@@ -121,7 +121,7 @@ const DocumentUpload = ({ onUploadSuccess }) => {
           type="file"
           style={{ display: 'none' }}
           onChange={handleChange}
-          accept=".pdf,.docx,.txt"
+          accept=".pdf,.docx,.txt,.json"
         />
         
         <Typography variant="body1" sx={{ fontWeight: 500, fontSize: '13px', color: 'text.primary', mb: 0.5 }}>

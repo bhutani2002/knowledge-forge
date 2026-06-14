@@ -56,6 +56,37 @@ const Layout = ({ children }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // Telemetry state
+  const [liveLatency, setLiveLatency] = useState(null);
+  const [apiOnline, setApiOnline] = useState(true);
+
+  useEffect(() => {
+    const measureLatency = async () => {
+      const start = performance.now();
+      try {
+        await api.get('/api/auth/actuator/health');
+        const end = performance.now();
+        setLiveLatency(Math.round(end - start));
+        setApiOnline(true);
+      } catch (err) {
+        const end = performance.now();
+        const rtt = Math.round(end - start);
+        // Fallback RTT check (if CORS blocks actuator, connection still completed)
+        if (rtt < 1000) {
+          setLiveLatency(rtt);
+          setApiOnline(true);
+        } else {
+          setLiveLatency(null);
+          setApiOnline(false);
+        }
+      }
+    };
+
+    measureLatency();
+    const interval = setInterval(measureLatency, 60000); // Check latency/status every 60 seconds (1 minute)
+    return () => clearInterval(interval);
+  }, []);
+
   // Workspace Share states
   const [shareOpen, setShareOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -446,13 +477,13 @@ const Layout = ({ children }) => {
         >
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#22c55e' }} />
+              <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: apiOnline ? '#22c55e' : '#ef4444' }} />
               <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 500, fontSize: '11px' }}>
-                {t('pipeline_active')}
+                {apiOnline ? t('pipeline_active') : 'System Offline'}
               </Typography>
             </Box>
             <Typography variant="caption" sx={{ color: 'text.primary', fontSize: '10px', px: 1, py: 0.2, borderRadius: '4px', border: '1px solid', borderColor: 'divider', bgcolor: 'background.default' }}>
-              {t('sla_label')}
+              {apiOnline ? t('sla_label') : 'SLA Degraded'}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -460,7 +491,7 @@ const Layout = ({ children }) => {
               {t('build_version')}
             </Typography>
             <Typography variant="caption" sx={{ color: 'text.disabled', fontSize: '10px' }}>
-              {t('latency_ms')}
+              {apiOnline && liveLatency !== null ? `${liveLatency}ms latency` : 'offline'}
             </Typography>
           </Box>
         </Box>

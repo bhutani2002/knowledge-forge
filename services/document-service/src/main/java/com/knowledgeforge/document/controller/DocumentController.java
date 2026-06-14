@@ -99,9 +99,9 @@ public class DocumentController {
         }
         
         String ext = originalFilename.substring(originalFilename.lastIndexOf(".")).toLowerCase();
-        if (!Arrays.asList(".pdf", ".docx", ".txt").contains(ext)) {
+        if (!Arrays.asList(".pdf", ".docx", ".txt", ".json").contains(ext)) {
             return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
-                    .body(Map.of("message", "Only PDF, DOCX, and TXT files are supported."));
+                    .body(Map.of("message", "Only PDF, DOCX, TXT, and JSON files are supported."));
         }
 
         if (file.getSize() > 50L * 1024 * 1024) {

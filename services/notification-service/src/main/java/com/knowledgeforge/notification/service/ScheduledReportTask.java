@@ -56,6 +56,7 @@ public class ScheduledReportTask {
         Map<String, String> eventPayload = new HashMap<>();
         eventPayload.put("report_id", reportId);
         eventPayload.put("workspace_id", workspaceId);
+        eventPayload.put("workspace_name", "Global Engineering Workspace");
         eventPayload.put("status", "TRIGGERED");
 
         String payloadJson = objectMapper.writeValueAsString(eventPayload);

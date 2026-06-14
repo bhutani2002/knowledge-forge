@@ -1,0 +1,205 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono&family=Playfair+Display:wght@500&display=swap');
+
+:root {
+  /* Core Color System - Premium Slate Navy Tech Theme */
+  --color-bg: #090b11;
+  --color-surface: #111625;
+  --color-surface-2: #1e293b;
+  --color-border: #1f293d;
+  --color-border-soft: #334155;
+  --color-code-bg: #070a12;
+  
+  --color-text-1: #f8fafc;
+  --color-text-2: #94a3b8;
+  --color-text-3: #64748b;
+  
+  --color-accent: #f97316;
+  --color-accent-soft: rgba(249, 115, 22, 0.08);
+  --color-accent-text: #fdba74;
+  
+  --color-success: #10b981;
+  --color-error: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+
+  /* Typography Rules */
+  --font-ui: 'Inter', sans-serif;
+  --font-code: 'JetBrains Mono', monospace;
+  --font-serif: 'Playfair Display', serif;
+  
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+}
+
+html[data-theme='light'] {
+  --color-bg: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-soft: #cbd5e1;
+  --color-code-bg: #f1f5f9;
+  
+  --color-text-1: #0f172a;
+  --color-text-2: #475569;
+  --color-text-3: #94a3b8;
+  
+  --color-accent-soft: rgba(234, 88, 12, 0.06);
+  --color-accent-text: #ea580c;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-1);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--color-text-1);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+a:hover {
+  color: var(--color-accent-text);
+}
+
+/* Skeleton Loading Lines */
+.skeleton-line {
+  height: 12px;
+  width: 100%;
+  background: linear-gradient(90deg, #1c1c1e 25%, #2a2a2d 50%, #1c1c1e 75%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.5s infinite;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 8px;
+}
+
+.skeleton-line.short {
+  width: 60%;
+}
+
+.skeleton-line.mid {
+  width: 85%;
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: var(--border-radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-soft);
+}
+
+/* Slide in drawer from right */
+.drawer-slide-in {
+  position: fixed;
+  top: 56px;
+  right: 0;
+  height: calc(100vh - 56px);
+  width: 400px;
+  background-color: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
+  transform: translateX(100%);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+  padding: 24px;
+}
+
+.drawer-slide-in.open {
+  transform: translateX(0);
+}
+
+.drawer-overlay {
+  position: fixed;
+  top: 56px;
+  left: 0;
+  width: 100vw;
+  height: calc(100vh - 56px);
+  background: rgba(0, 0, 0, 0.2);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.drawer-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Styling markdown inside chats */
+.markdown-body pre {
+  background-color: var(--color-code-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  padding: 12px;
+  font-family: var(--font-code);
+  font-size: 12px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.markdown-body code {
+  font-family: var(--font-code);
+  font-size: 12px;
+  background-color: var(--color-code-bg);
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+/* Streaming cursor blinking animation */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  background-color: var(--color-accent);
+  margin-left: 4px;
+  vertical-align: middle;
+  animation: blink 1s step-end infinite;
+}

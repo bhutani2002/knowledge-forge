@@ -1,0 +1,305 @@
+version: '3.8'
+
+services:
+  # --- Databases & Core Infrastructure ---
+  postgres:
+    image: ankane/pgvector:v0.5.1
+    container_name: kf-postgres
+    environment:
+      POSTGRES_DB: knowledgeforge
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d knowledgeforge"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  mongodb:
+    image: mongo:7.0
+    container_name: kf-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis/redis-stack:latest
+    container_name: kf-redis
+    ports:
+      - "6379:6379"
+      - "8001:8001" # RedisInsight dashboard
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2023-05-18T00-05-36Z
+    container_name: kf-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: kf-mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # UI
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "1025"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- Messaging Brokers ---
+  rabbitmq:
+    image: rabbitmq:3.11-management
+    container_name: kf-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    container_name: kf-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    container_name: kf-kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # --- Application Reverse Proxy ---
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: kf-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - api-gateway
+    restart: always
+
+  # --- API Gateway & Microservices ---
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - REDIS_HOST=redis
+      - PORT=8080
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-auth-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/knowledgeforge
+      - REDIS_HOST=redis
+      - PORT=8081
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_TENANT_ID=${MICROSOFT_TENANT_ID}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  document-service:
+    build:
+      context: ./services/document-service
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-document-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/knowledgeforge
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - RABBITMQ_HOST=rabbitmq
+      - REDIS_HOST=redis
+      - PORT=8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  chat-service:
+    build:
+      context: ./services/chat-service
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-chat-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATA_MONGODB_URI=mongodb://mongodb:27017/knowledgeforge
+      - REDIS_HOST=redis
+      - PYTHON_AI_SERVICE_URL=http://python-ai-service:8000
+      - PORT=8083
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  workspace-service:
+    build:
+      context: ./services/workspace-service
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-workspace-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/knowledgeforge
+      - PORT=8084
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: ../../infra/docker/Dockerfile.java
+    container_name: kf-notification-service
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - REDIS_HOST=redis
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - SPRING_MAIL_HOST=mailhog
+      - SPRING_MAIL_PORT=1025
+      - PORT=8085
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  python-ai-service:
+    build:
+      context: ./services/python-ai-service
+      dockerfile: ../../infra/docker/Dockerfile.python
+    container_name: kf-python-ai-service
+    environment:
+      - POSTGRES_HOST=postgres
+      - MONGO_URI=mongodb://mongodb:27017
+      - REDIS_HOST=redis
+      - RABBITMQ_HOST=rabbitmq
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - USE_FOUNDRY_IQ=${USE_FOUNDRY_IQ}
+      - AZURE_AI_SEARCH_ENDPOINT=${AZURE_AI_SEARCH_ENDPOINT}
+      - AZURE_AI_SEARCH_KEY=${AZURE_AI_SEARCH_KEY}
+      - AZURE_AI_PROJECT_ENDPOINT=${AZURE_AI_PROJECT_ENDPOINT}
+      - AZURE_AI_MODEL_DEPLOYMENT_NAME=${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - hf_models_cache:/root/.cache/huggingface
+
+  python-ai-worker:
+    build:
+      context: ./services/python-ai-service
+      dockerfile: ../../infra/docker/Dockerfile.python
+    container_name: kf-python-ai-worker
+    entrypoint: ["python", "-m", "app.worker"]
+    environment:
+      - POSTGRES_HOST=postgres
+      - MONGO_URI=mongodb://mongodb:27017
+      - REDIS_HOST=redis
+      - RABBITMQ_HOST=rabbitmq
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+      - AWS_ENDPOINT_URL=http://minio:9000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - USE_FOUNDRY_IQ=${USE_FOUNDRY_IQ}
+      - AZURE_AI_SEARCH_ENDPOINT=${AZURE_AI_SEARCH_ENDPOINT}
+      - AZURE_AI_SEARCH_KEY=${AZURE_AI_SEARCH_KEY}
+      - AZURE_AI_PROJECT_ENDPOINT=${AZURE_AI_PROJECT_ENDPOINT}
+      - AZURE_AI_MODEL_DEPLOYMENT_NAME=${AZURE_AI_MODEL_DEPLOYMENT_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    volumes:
+      - hf_models_cache:/root/.cache/huggingface
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  minio_data:
+  hf_models_cache:

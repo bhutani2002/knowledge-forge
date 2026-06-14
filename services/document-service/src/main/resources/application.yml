@@ -1,0 +1,38 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: document-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/knowledgeforge}
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: 5672
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+aws:
+  s3:
+    bucket: ${AWS_S3_BUCKET:knowledgeforge-docs}
+    region: ${AWS_REGION:us-east-1}
+    endpoint: ${AWS_ENDPOINT_URL:http://localhost:9000}
+    access-key: ${AWS_ACCESS_KEY_ID:minioadmin}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:minioadmin}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-}] [spanId=%X{spanId:-}] - %msg%n"

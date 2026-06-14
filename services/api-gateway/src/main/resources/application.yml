@@ -1,0 +1,75 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  threads:
+    virtual:
+      enabled: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "http://localhost:5173,http://localhost"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+      routes:
+        - id: auth-service
+          uri: http://${AUTH_SERVICE_HOST:auth-service}:8081
+          predicates:
+            - Path=/api/auth/**, /oauth2/**, /login/oauth2/**
+        - id: document-analysis
+          uri: http://${PYTHON_AI_SERVICE_HOST:python-ai-service}:8000
+          predicates:
+            - Path=/api/docs/analyze
+        - id: document-service
+          uri: http://${DOCUMENT_SERVICE_HOST:document-service}:8082
+          predicates:
+            - Path=/api/docs/**
+        - id: chat-service
+          uri: http://${CHAT_SERVICE_HOST:chat-service}:8083
+          predicates:
+            - Path=/api/chat/**
+        - id: workspace-service
+          uri: http://${WORKSPACE_SERVICE_HOST:workspace-service}:8084
+          predicates:
+            - Path=/api/workspaces/**
+        - id: notification-service
+          uri: http://${NOTIFICATION_SERVICE_HOST:notification-service}:8085
+          predicates:
+            - Path=/api/notifications/**
+        # WebSocket mapping
+        - id: chat-websocket
+          uri: ws://${CHAT_SERVICE_HOST:chat-service}:8083
+          predicates:
+            - Path=/ws/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-}] [spanId=%X{spanId:-}] - %msg%n"

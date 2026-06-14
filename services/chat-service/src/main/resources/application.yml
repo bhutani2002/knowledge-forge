@@ -1,0 +1,33 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: chat-service
+  threads:
+    virtual:
+      enabled: true
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/knowledgeforge}
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: 6379
+
+python:
+  ai:
+    service:
+      url: ${PYTHON_AI_SERVICE_URL:http://localhost:8000}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [traceId=%X{traceId:-}] [spanId=%X{spanId:-}] - %msg%n"

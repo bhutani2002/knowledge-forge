@@ -29,6 +29,9 @@ public class Document {
     @Column(nullable = false)
     private String status = "PENDING";
 
+    @Column(name = "uploaded_by")
+    private String uploadedBy;
+
     @Column(name = "query_count", nullable = false)
     private Integer queryCount = 0;
 
@@ -122,5 +125,13 @@ public class Document {
 
     public void setQueryCount(Integer queryCount) {
         this.queryCount = queryCount;
+    }
+
+    public String getUploadedBy() {
+        return uploadedBy;
+    }
+
+    public void setUploadedBy(String uploadedBy) {
+        this.uploadedBy = uploadedBy;
     }
 }

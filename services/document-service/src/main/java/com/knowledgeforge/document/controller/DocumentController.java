@@ -53,18 +53,22 @@ public class DocumentController {
         if (docs.isEmpty() && "00000000-0000-0000-0000-000000000000".equals(workspaceId.toString())) {
             Document doc1 = new Document(null, workspaceId, "workspaces/" + workspaceId + "/q3_report.pdf", "Q3 Financial Report.pdf", "hash_q3_financial_report");
             doc1.setStatus("INDEXED");
+            doc1.setUploadedBy("System");
             documentRepository.save(doc1);
             
             Document doc2 = new Document(null, workspaceId, "workspaces/" + workspaceId + "/roadmap.docx", "Product Roadmap 2025.docx", "hash_product_roadmap_2025");
             doc2.setStatus("INDEXED");
+            doc2.setUploadedBy("System");
             documentRepository.save(doc2);
             
             Document doc3 = new Document(null, workspaceId, "workspaces/" + workspaceId + "/legal_contract.pdf", "Legal Contract v2.pdf", "hash_legal_contract_v2");
             doc3.setStatus("PROCESSING");
+            doc3.setUploadedBy("System");
             documentRepository.save(doc3);
             
             Document doc4 = new Document(null, workspaceId, "workspaces/" + workspaceId + "/eng_spec.txt", "Engineering Spec v3.txt", "hash_engineering_spec");
             doc4.setStatus("FAILED");
+            doc4.setUploadedBy("System");
             documentRepository.save(doc4);
 
             docs = documentRepository.findByWorkspaceId(workspaceId);
@@ -77,7 +81,8 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("workspaceId") UUID workspaceId,
             @RequestHeader(value = "X-User-Id", required = false) String headerUserIdStr,
-            @RequestHeader(value = "X-User-Role", required = false) String headerUserRole) {
+            @RequestHeader(value = "X-User-Role", required = false) String headerUserRole,
+            @RequestHeader(value = "X-User-Name", required = false) String headerUserName) {
 
         if ("GUEST".equalsIgnoreCase(headerUserRole) || headerUserIdStr == null || "guest-user-id".equals(headerUserIdStr)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -145,6 +150,7 @@ public class DocumentController {
 
             // 5. Store Metadata in Postgres
             Document doc = new Document(userId, workspaceId, s3Key, originalFilename, fileHash);
+            doc.setUploadedBy(headerUserName != null && !headerUserName.isEmpty() ? headerUserName : "User");
             documentRepository.save(doc);
 
             // 6. Publish job to RabbitMQ queue: document.ingest

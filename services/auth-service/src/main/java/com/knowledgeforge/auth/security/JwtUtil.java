@@ -27,6 +27,7 @@ public class JwtUtil {
                 .withClaim("email", user.getEmail())
                 .withClaim("role", user.getRole())
                 .withClaim("tier", user.getTier())
+                .withClaim("displayName", user.getDisplayName() != null ? user.getDisplayName() : "")
                 .withIssuedAt(new Date())
                 .withExpiresAt(new Date(System.currentTimeMillis() + ACCESS_TOKEN_EXPIRY))
                 .sign(getAlgorithm());

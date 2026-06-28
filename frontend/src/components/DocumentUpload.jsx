@@ -66,6 +66,14 @@ const DocumentUpload = ({ onUploadSuccess }) => {
 
       if (onUploadSuccess) onUploadSuccess();
 
+      const { stompClient } = useStore.getState();
+      if (stompClient && stompClient.connected && activeWorkspace) {
+        stompClient.publish({
+          destination: `/topic/workspace/${activeWorkspace.id}/documents`,
+          body: JSON.stringify({ action: 'UPLOADED', timestamp: Date.now() })
+        });
+      }
+
     } catch (e) {
       setProgress(0);
       setUploading(false);

@@ -15,6 +15,16 @@ export default defineConfig({
       '/ws': {
         target: 'ws://localhost:8080',
         ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            // Silence proxy errors
+          });
+          proxy.on('proxyReqWs', (proxyReq, req, socket) => {
+            socket.on('error', (err) => {
+              // Silence underlying connection reset errors on WebSocket socket
+            });
+          });
+        }
       }
     }
   }

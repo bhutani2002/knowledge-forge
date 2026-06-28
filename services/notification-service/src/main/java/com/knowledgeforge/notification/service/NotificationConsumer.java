@@ -18,6 +18,9 @@ public class NotificationConsumer {
     private final JavaMailSender mailSender;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    @org.springframework.beans.factory.annotation.Value("${spring.mail.from:noreply@knowledgeforge.com}")
+    private String mailFrom;
+
     public NotificationConsumer(JavaMailSender mailSender) {
         this.mailSender = mailSender;
     }
@@ -33,7 +36,7 @@ public class NotificationConsumer {
 
             // Build and send email notification
             SimpleMailMessage mail = new SimpleMailMessage();
-            mail.setFrom("noreply@knowledgeforge.com");
+            mail.setFrom(mailFrom);
             mail.setTo("user@knowledgeforge.com"); // Static user for demo
             mail.setSubject("KnowledgeForge - Document Status Update");
             mail.setText(String.format("Hello,\n\nYour document '%s' processing status has completed with: %s.\n\nBest regards,\nKnowledgeForge Team",
@@ -63,7 +66,7 @@ public class NotificationConsumer {
             }
 
             SimpleMailMessage mail = new SimpleMailMessage();
-            mail.setFrom("noreply@knowledgeforge.com");
+            mail.setFrom(mailFrom);
             mail.setTo("workspace-admin@knowledgeforge.com");
             mail.setSubject("KnowledgeForge - Weekly Intelligence Report");
             mail.setText(String.format("Hello,\n\nYour weekly intelligence report has been compiled for workspace: %s.\n\nSummary:\n- New documents processed: 12\n- Key topics detected: Distributed Systems, Redis Cache, RAG Pipelines\n- Grounding average score: 96.5%%\n\nBest regards,\nKnowledgeForge Team",

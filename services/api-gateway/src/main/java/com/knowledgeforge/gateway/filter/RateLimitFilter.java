@@ -30,6 +30,11 @@ public class RateLimitFilter implements GlobalFilter, Ordered {
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
+        String path = request.getURI().getPath();
+        if (path.startsWith("/ws") || path.startsWith("/api/auth/health")) {
+            return chain.filter(exchange);
+        }
+
         String ip = request.getRemoteAddress() != null 
                 ? request.getRemoteAddress().getAddress().getHostAddress() 
                 : "unknown-ip";

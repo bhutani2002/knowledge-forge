@@ -14,6 +14,15 @@
 
 KnowledgeForge is designed as a distributed microservice architecture, utilizing event-driven communication and robust isolation layers to guarantee scalability, low latency, and secure multi-tenant partitioning.
 
+### 🖼️ System Design Architecture
+
+<p align="center">
+  <img src="frontend/public/system_architecture_diagram.png" alt="System Architecture Diagram" width="800" />
+</p>
+
+> [!NOTE]
+> Below is the interactive Mermaid schema representing the distributed system architecture and messaging flows.
+
 ```mermaid
 graph TD
     Client[React Frontend / Browser] -->|HTTPS REST / WebSocket STOMP| Nginx[Nginx Reverse Proxy]
@@ -57,6 +66,7 @@ graph TD
     end
 
     NotifSvc -->|Send Notification Emails| MailHog[MailHog SMTP Panel]
+    ChatSvc -.->|WS Broadcast: presence, typing, sessions, messages| Client
 ```
 
 ### Core Services Detailed Breakdown
@@ -64,7 +74,7 @@ graph TD
 - **API Gateway (`api-gateway`)**: Built with Spring Cloud Gateway. Coordinates traffic routing, appends Correlation IDs to incoming client requests, runs reactive rate limiters in Redis, and serves as the secure single-entry point to the cluster.
 - **Auth Service (`auth-service`)**: Handles secure user registration and login. Enforces BCrypt (strength 12) password hashing, manages rotating JWT access/refresh token lifecycles, integrates **Google OAuth2 Single Sign-On (SSO)**, and executes **Role-Based Access Control (RBAC)** and **Attribute-Based Access Control (ABAC)** rules to block cross-tenant requests and manage workspace access privileges.
 - **Document Service (`document-service`)**: Manages file uploads. Reads multipart files, extracts initial metadata, gzips file headers, and stores the raw document streams in MinIO. Once saved, it publishes an ingestion job payload containing the file reference to RabbitMQ.
-- **Chat Service (`chat-service`)**: Manages active user chat sessions using SockJS and STOMP WebSocket protocols. It writes and retrieves full message history in MongoDB, implements pub-sub event distribution using Redis, and translates queries to send to the Python AI service.
+- **Chat Service (`chat-service`)**: Manages active user chat sessions using SockJS and STOMP WebSocket protocols. It writes and retrieves full message history in MongoDB, implements Redis-backed pub-sub event distribution, and supports real-time workspace collaborator syncing (presence, typing indicators, session renaming, and chat message sync) using `/topic/workspace/{workspaceId}/{presence,typing,sessions,messages}` channels.
 - **Workspace Service (`workspace-service`)**: Manages tenant workspace lifecycles, memberships, invitation links, and access rules (collaborator roles, public vs. private workspaces) stored in PostgreSQL.
 - **Notification Service (`notification-service`)**: Listens to Kafka events to send document processing status updates and weekly intelligence reports via MailHog, coordinating scheduled executions across instances using Redis-based leader election.
 - **Python AI Subsystem (`python-ai-service` & `python-ai-worker`)**: High-performance FastAPI modules executing LangChain workflows. The worker consumes RabbitMQ events to process files, while the service answers user questions by querying LLMs.
@@ -78,9 +88,16 @@ graph TD
 - **Read-Only Public Guest Demo**: Allows users to instantly interact with the workspace chats and explore the RAG features in a secure, read-only guest state without requiring initial login or registration.
 - **Dynamic Hybrid Search & Fallback**: Standard configuration uses Azure AI Search (Microsoft Foundry IQ) for cloud vector search. If the cloud search client encounters network errors, API limits, or configuration issues, the query engine automatically falls back to its local vector retrieval pipeline (PostgreSQL with `pgvector` dense indexes) to ensure uninterrupted service.
 - **Multi-Agent Query Routing**: Supports intelligent routing of user questions to multiple LLMs (Google Gemini 1.5/2.5, Groq Mistral/Llama, OpenRouter models, and ChatGPT models deployed via Microsoft Foundry IQ / Azure AI Projects) with automatic failovers.
-- **Real-time Performance**: Uses throttled WebSocket streaming (limited to 150ms UI updates) to guarantee smooth, freeze-free token rendering inside the browser.
+- **Real-time Performance & Collaboration**: Powered by SockJS and STOMP WebSockets backed by Redis:
+  - **Multiplayer Presence Tooltips**: Live collaborator lists sync instantly across sessions, showing active user avatars with tooltips displaying their display name and email.
+  - **Workspace-Scoped Typing Alerts**: Co-presence typing indicators notify the team when colleagues are active, formatting indicators dynamically from singular (*User is typing...*) to plural (*User1, User2 are typing...*).
+  - **Collaborative Message Sync**: Message exchanges and streaming AI answers update instantly on all active collaborator screens viewing the same chat session.
+  - **Self-Echo Suppression & Renames**: Real-time session additions, deletions, and auto-renaming synchronize seamlessly without duplicate items.
+  - **Collapsible Sessions Sidebar**: An adaptive side navigation panel toggles to maximize the chat workspace on lower-resolution screens.
+  - **Real-Time Service SLA Monitoring**: Displays a live connection monitor showing `100% SLA` or `SLA Degraded` based on active gateway and service health.
 - **Theme & i18n**: Premium custom UI with complete dark/light mode toggles and bilingual support (English and Hindi localization) for all headers, dropdowns, welcome screens, and workspaces.
 - **Insights Dashboard & Data Export**: A dedicated workspace analytics dashboard displaying document processing statistics, extracted summaries, automated entity tagging, and workload correlation metrics, complete with built-in data export capability.
+- **Document Catalog Audit Trail**: Ingested files track and display the specific user who uploaded them in both English and Hindi tables, providing strong data compliance.
 - **Model Context Protocol (MCP) Tooling**: Integrates native Model Context Protocol (MCP) standards. Cloud-based LLMs deployed via the Azure AI Projects SDK are configured with an `MCPTool` that calls the FastAPI microservice (`/knowledgebases/{workspace_id}/mcp`) dynamically to fetch vector-grounded text chunks.
 - **Security Scanning & Compliance**: Zero hardcoded secrets. All sensitive keys are loaded strictly from the environment, and credentials in the template `.env.example` are kept generic.
 

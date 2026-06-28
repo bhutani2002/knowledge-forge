@@ -56,6 +56,11 @@ spring:
           uri: ws://${CHAT_SERVICE_HOST:chat-service}:8083
           predicates:
             - Path=/ws/**
+            - Header=Upgrade, (?i)websocket
+        - id: chat-websocket-http
+          uri: http://${CHAT_SERVICE_HOST:chat-service}:8083
+          predicates:
+            - Path=/ws/**
 
 management:
   endpoints:

@@ -24,7 +24,7 @@ const DashboardPage = () => {
   const [timeframe, setTimeframe] = useState('30'); // '7', '30', '365'
 
   useEffect(() => {
-    if (activeWorkspace) {
+    if (activeWorkspace && (activeWorkspace.id === '00000000-0000-0000-0000-000000000000' || isAuthenticated)) {
       fetchDocuments();
       fetchSessions();
       if (isAuthenticated) {
@@ -416,7 +416,7 @@ const DashboardPage = () => {
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               {getMostQueried().map((doc, idx) => (
                 <Box 
-                   key={idx}
+                  key={idx}
                   sx={{ 
                     display: 'flex', 
                     alignItems: 'center', 

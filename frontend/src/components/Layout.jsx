@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useStore, api } from '../store';
+import SockJS from 'sockjs-client';
+import { Client } from '@stomp/stompjs';
 import {
   AppBar, Toolbar, Typography, Button, IconButton, Select, MenuItem,
   Box, Drawer, List, ListItem, ListItemIcon, ListItemText, Divider,
   Avatar, Dialog, DialogTitle, DialogContent, TextField, DialogActions
 } from '@mui/material';
 import {
+  Menu as MenuIcon,
+  ChevronLeft as ChevronLeftIcon,
   SmartToyOutlined as ChatIcon,
   FolderCopyOutlined as DocIcon,
   AnalyticsOutlined as DashIcon,
@@ -45,6 +49,8 @@ const Layout = ({ children }) => {
     createWorkspace, login, register, logout, themeMode, setThemeMode
   } = useStore();
 
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const getTranslatedWorkspaceName = (name) => {
     if (name === "Default Workspace") return t("default_workspace");
     if (name === "Public Demo Workspace") return t("public_workspace");
@@ -56,6 +62,167 @@ const Layout = ({ children }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
+  // STOMP WebSocket Channel Connection
+  useEffect(() => {
+    if (!activeWorkspace) return;
+    // Only connect to custom workspace presence if authenticated
+    if (activeWorkspace.id !== '00000000-0000-0000-0000-000000000000' && !isAuthenticated) return;
+
+    const socket = new SockJS('/ws');
+    const client = new Client({
+      webSocketFactory: () => socket,
+      reconnectDelay: 5000,
+      heartbeatIncoming: 4000,
+      heartbeatOutgoing: 4000,
+    });
+
+    const currentUserId = user?.userId || localStorage.getItem('guestUserId') || 'guest';
+    let joinTimeout = null;
+
+    client.onConnect = (frame) => {
+      useStore.getState().setStompClient(client);
+
+      // Subscribe to sessions list updates
+      client.subscribe(`/topic/workspace/${activeWorkspace.id}/sessions`, (msg) => {
+        const data = JSON.parse(msg.body);
+        if (data.userId && data.userId === currentUserId) return; // ignore our own events
+
+        if (data.action === 'CREATE') {
+          useStore.getState().addSessionFromWs(data.session);
+        } else if (data.action === 'RENAME') {
+          useStore.getState().renameSessionFromWs(data.sessionId, data.title);
+        } else if (data.action === 'DELETE') {
+          useStore.getState().deleteSessionFromWs(data.sessionId);
+        }
+      });
+
+      // Subscribe to documents updates
+      client.subscribe(`/topic/workspace/${activeWorkspace.id}/documents`, (msg) => {
+        const data = JSON.parse(msg.body);
+        if (data.action === 'UPLOADED') {
+          useStore.getState().fetchDocuments();
+        }
+      });
+
+      // Subscribe to chat message updates
+      client.subscribe(`/topic/workspace/${activeWorkspace.id}/messages`, (msg) => {
+        const data = JSON.parse(msg.body);
+        if (data.userId && data.userId === currentUserId) return; // ignore our own events
+
+        if (data.action === 'ADD_MESSAGE') {
+          const currentSession = useStore.getState().currentSession;
+          if (currentSession && currentSession.id === data.message.sessionId) {
+            useStore.getState().addMessageFromWs(data.message);
+          }
+        }
+      });
+
+      // Subscribe to typing updates
+      client.subscribe(`/topic/workspace/${activeWorkspace.id}/typing`, (msg) => {
+        const data = JSON.parse(msg.body);
+        const name = data.username;
+        const typing = data.typing;
+        const incomingSessionId = data.sessionId || 'new';
+
+        if (name && name !== (user?.displayName || user?.email || 'Guest')) {
+          useStore.getState().setTypingUsers((prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            const filtered = list.filter(u => u.username !== name);
+            if (typing) {
+              return [...filtered, { username: name, sessionId: incomingSessionId }];
+            }
+            return filtered;
+          });
+        }
+      });
+
+      // Subscribe to presence updates
+      client.subscribe(`/topic/workspace/${activeWorkspace.id}/presence`, (msg) => {
+        const data = JSON.parse(msg.body);
+        if (data.userId === currentUserId) return; // ignore our own events
+
+        if (data.action === 'JOIN') {
+          useStore.getState().setPresenceList((prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            const exists = list.find((p) => p.userId === data.userId);
+            if (!exists) {
+              return [...list, data];
+            }
+            // Update fields if changed
+            return list.map(p => p.userId === data.userId ? data : p);
+          });
+
+          // Respond with our presence so the new user knows we are online
+          if (!data.isReply) {
+            client.publish({
+              destination: `/app/workspace/${activeWorkspace.id}/presence`,
+              body: JSON.stringify({
+                userId: currentUserId,
+                username: user?.displayName || user?.email || 'Guest User',
+                displayName: user?.displayName || '',
+                email: user?.email || '',
+                action: 'JOIN',
+                isReply: true
+              })
+            });
+          }
+        } else if (data.action === 'LEAVE') {
+          useStore.getState().setPresenceList((prev) => {
+            const list = Array.isArray(prev) ? prev : [];
+            return list.filter((p) => p.userId !== data.userId);
+          });
+        }
+      });
+
+      // Delay initial JOIN publish to guarantee our SUBSCRIBE registration on broker is complete first
+      joinTimeout = setTimeout(() => {
+        if (client.connected) {
+          client.publish({
+            destination: `/app/workspace/${activeWorkspace.id}/presence`,
+            body: JSON.stringify({
+              userId: currentUserId,
+              username: user?.displayName || user?.email || 'Guest User',
+              displayName: user?.displayName || '',
+              email: user?.email || '',
+              action: 'JOIN',
+              isReply: false
+            })
+          });
+        }
+      }, 300);
+    };
+
+    client.activate();
+
+    return () => {
+      if (joinTimeout) clearTimeout(joinTimeout);
+      if (client && client.connected) {
+        try {
+          client.publish({
+            destination: `/app/workspace/${activeWorkspace.id}/presence`,
+            body: JSON.stringify({
+              userId: currentUserId,
+              username: user?.displayName || user?.email || 'Guest User',
+              action: 'LEAVE'
+            })
+          });
+        } catch (e) {}
+        setTimeout(() => {
+          try {
+            client.deactivate();
+          } catch (e) {}
+        }, 100);
+      } else {
+        try {
+          client.deactivate();
+        } catch (e) {}
+      }
+      useStore.getState().setStompClient(null);
+      useStore.getState().setPresenceList([]);
+      useStore.getState().setTypingUsers([]);
+    };
+  }, [activeWorkspace, user, isAuthenticated]);
+
   // Telemetry state
   const [liveLatency, setLiveLatency] = useState(null);
   const [apiOnline, setApiOnline] = useState(true);
@@ -64,7 +231,7 @@ const Layout = ({ children }) => {
     const measureLatency = async () => {
       const start = performance.now();
       try {
-        await api.get('/api/auth/actuator/health');
+        await api.get('/api/auth/health');
         const end = performance.now();
         setLiveLatency(Math.round(end - start));
         setApiOnline(true);
@@ -178,6 +345,16 @@ const Layout = ({ children }) => {
       >
         <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', height: 56, px: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {!sidebarOpen && (
+              <IconButton 
+                onClick={() => setSidebarOpen(true)}
+                sx={{ color: 'text.secondary', mr: 0.5 }}
+                title="Expand sidebar"
+                size="small"
+              >
+                <MenuIcon sx={{ fontSize: '20px' }} />
+              </IconButton>
+            )}
             <Box 
               onClick={() => navigate('/')}
               sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
@@ -356,38 +533,58 @@ const Layout = ({ children }) => {
       <Drawer
         variant="permanent"
         sx={{
-          width: 240,
+          width: sidebarOpen ? 240 : 0,
           flexShrink: 0,
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.leavingScreen,
+          }),
           [`& .MuiDrawer-paper`]: { 
-            width: 240, 
+            width: sidebarOpen ? 240 : 0, 
             boxSizing: 'border-box', 
             bgcolor: 'background.paper', 
             borderRight: '1px solid',
             borderColor: 'divider',
             display: 'flex',
             flexDirection: 'column',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            transition: (theme) => theme.transitions.create('width', {
+              easing: theme.transitions.easing.sharp,
+              duration: theme.transitions.duration.leavingScreen,
+            }),
+            overflowX: 'hidden'
           },
         }}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, overflowX: 'hidden', overflowY: 'auto' }}>
           <Toolbar sx={{ height: 56 }} />
           
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              px: 3, 
-              pt: 3, 
-              pb: 1, 
-              display: 'block', 
-              fontWeight: 500, 
-              fontSize: '11px',
-              color: 'text.disabled', 
-              letterSpacing: '0.05em' 
-            }}
-          >
-            {t('gateway').toUpperCase()}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 3, pt: 3, pb: 1 }}>
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                display: 'block', 
+                fontWeight: 500, 
+                fontSize: '11px',
+                color: 'text.disabled', 
+                letterSpacing: '0.05em' 
+              }}
+            >
+              {t('gateway').toUpperCase()}
+            </Typography>
+            <IconButton 
+              onClick={() => setSidebarOpen(false)}
+              size="small"
+              title="Collapse sidebar"
+              sx={{ 
+                color: 'text.secondary',
+                p: 0.5,
+                '&:hover': { bgcolor: 'action.hover' }
+              }}
+            >
+              <ChevronLeftIcon sx={{ fontSize: '18px' }} />
+            </IconButton>
+          </Box>
 
           <List sx={{ px: 1 }}>
             {menuItems.map((item) => {

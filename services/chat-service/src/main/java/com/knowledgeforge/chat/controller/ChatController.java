@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
@@ -24,13 +25,16 @@ public class ChatController {
     private final ChatSessionRepository sessionRepository;
     private final ChatMessageRepository messageRepository;
     private final WebClient webClient;
+    private final SimpMessagingTemplate messagingTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public ChatController(ChatSessionRepository sessionRepository, ChatMessageRepository messageRepository,
-                          @Value("${python.ai.service.url}") String pythonAiUrl) {
+                          @Value("${python.ai.service.url}") String pythonAiUrl,
+                          SimpMessagingTemplate messagingTemplate) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.webClient = WebClient.create(pythonAiUrl);
+        this.messagingTemplate = messagingTemplate;
     }
 
     @PostMapping("/session")
@@ -42,6 +46,15 @@ public class ChatController {
 
         ChatSession session = new ChatSession(workspaceId, userId != null ? userId : "guest-user-id", title, isGuest);
         sessionRepository.save(session);
+        
+        try {
+            messagingTemplate.convertAndSend("/topic/workspace/" + workspaceId + "/sessions", Map.of(
+                    "action", "CREATE",
+                    "userId", userId != null ? userId : "guest-user-id",
+                    "session", session
+            ));
+        } catch (Exception ignored) {}
+
         return ResponseEntity.ok(session);
     }
 
@@ -49,7 +62,11 @@ public class ChatController {
     public ResponseEntity<List<ChatSession>> getSessions(
             @RequestParam("workspaceId") String workspaceId,
             @RequestHeader(value = "X-User-Id", defaultValue = "guest-user-id") String userId) {
-        return ResponseEntity.ok(sessionRepository.findByWorkspaceIdAndUserIdOrderByCreatedAtDesc(workspaceId, userId));
+        if ("00000000-0000-0000-0000-000000000000".equals(workspaceId)) {
+            return ResponseEntity.ok(sessionRepository.findByWorkspaceIdAndUserIdOrderByCreatedAtDesc(workspaceId, userId));
+        } else {
+            return ResponseEntity.ok(sessionRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId));
+        }
     }
 
     @GetMapping("/stats")
@@ -57,7 +74,12 @@ public class ChatController {
             @RequestParam("workspaceId") String workspaceId,
             @RequestParam(value = "days", required = false) Integer days,
             @RequestHeader(value = "X-User-Id", defaultValue = "guest-user-id") String userId) {
-        List<ChatSession> sessions = sessionRepository.findByWorkspaceIdAndUserIdOrderByCreatedAtDesc(workspaceId, userId);
+        List<ChatSession> sessions;
+        if ("00000000-0000-0000-0000-000000000000".equals(workspaceId)) {
+            sessions = sessionRepository.findByWorkspaceIdAndUserIdOrderByCreatedAtDesc(workspaceId, userId);
+        } else {
+            sessions = sessionRepository.findByWorkspaceIdOrderByCreatedAtDesc(workspaceId);
+        }
         if (sessions.isEmpty()) {
             return ResponseEntity.ok(Map.of("queriesCount", 0L, "sessionsCount", 0L));
         }
@@ -89,8 +111,11 @@ public class ChatController {
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
             @RequestParam(value = "docIds", required = false) String docIds,
+            @RequestParam(value = "userName", required = false) String userName,
             @RequestHeader(value = "X-User-Id", defaultValue = "guest-user-id") String userId,
-            @RequestHeader(value = "X-User-Role", defaultValue = "GUEST") String userRole) {
+            @RequestHeader(value = "X-User-Role", defaultValue = "GUEST") String userRole,
+            @RequestHeader(value = "X-User-Name", required = false) String userNameHeader,
+            @RequestHeader(value = "X-User-Email", required = false) String userEmailHeader) {
 
         // 1. Get or create session metadata
         ChatSession session = sessionRepository.findById(sessionId)
@@ -100,11 +125,38 @@ public class ChatController {
             String newTitle = query.length() > 30 ? query.substring(0, 27) + "..." : query;
             session.setTitle(newTitle);
             sessionRepository.save(session);
+            try {
+                messagingTemplate.convertAndSend("/topic/workspace/" + session.getWorkspaceId() + "/sessions", Map.of(
+                        "action", "RENAME",
+                        "userId", userId,
+                        "sessionId", sessionId,
+                        "title", newTitle
+                ));
+            } catch (Exception ignored) {}
+        }
+
+        // Resolve sender's display name
+        String resolvedSenderName = "Guest User";
+        if (userName != null && !userName.trim().isEmpty()) {
+            resolvedSenderName = userName;
+        } else if (userNameHeader != null && !userNameHeader.trim().isEmpty()) {
+            resolvedSenderName = userNameHeader;
+        } else if (userEmailHeader != null && !userEmailHeader.trim().isEmpty()) {
+            resolvedSenderName = userEmailHeader;
         }
 
         // 2. Save User message to database
-        ChatMessage userMessage = new ChatMessage(sessionId, userId, "User", "user", query);
+        ChatMessage userMessage = new ChatMessage(sessionId, userId, resolvedSenderName, "user", query);
         messageRepository.save(userMessage);
+
+        // Broadcast User message to other workspace members via WebSocket
+        try {
+            messagingTemplate.convertAndSend("/topic/workspace/" + session.getWorkspaceId() + "/messages", Map.of(
+                    "action", "ADD_MESSAGE",
+                    "userId", userId,
+                    "message", userMessage
+            ));
+        } catch (Exception ignored) {}
 
         // 3. Request python AI service via WebClient and stream tokens
         String encodedQuery = java.net.URLEncoder.encode(query, java.nio.charset.StandardCharsets.UTF_8);
@@ -161,6 +213,15 @@ public class ChatController {
                     assistantMessage.setCitations(citationsHolder);
                     assistantMessage.setExplainabilityReport(reportHolder);
                     messageRepository.save(assistantMessage);
+
+                    // Broadcast Assistant message to other workspace members via WebSocket
+                    try {
+                        messagingTemplate.convertAndSend("/topic/workspace/" + session.getWorkspaceId() + "/messages", Map.of(
+                                "action", "ADD_MESSAGE",
+                                "userId", "assistant-id",
+                                "message", assistantMessage
+                        ));
+                    } catch (Exception ignored) {}
                 });
     }
 
@@ -188,7 +249,8 @@ public class ChatController {
     @PutMapping("/session/{id}")
     public ResponseEntity<ChatSession> renameSession(
             @PathVariable("id") String sessionId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Id", defaultValue = "guest-user-id") String userId) {
         String title = body.get("title");
         if (title == null || title.trim().isEmpty()) {
             return ResponseEntity.badRequest().build();
@@ -200,17 +262,40 @@ public class ChatController {
         ChatSession session = sessionOpt.get();
         session.setTitle(title);
         sessionRepository.save(session);
+
+        try {
+            messagingTemplate.convertAndSend("/topic/workspace/" + session.getWorkspaceId() + "/sessions", Map.of(
+                    "action", "RENAME",
+                    "userId", userId,
+                    "sessionId", sessionId,
+                    "title", title
+            ));
+        } catch (Exception ignored) {}
+
         return ResponseEntity.ok(session);
     }
 
     @DeleteMapping("/session/{id}")
-    public ResponseEntity<Void> deleteSession(@PathVariable("id") String sessionId) {
+    public ResponseEntity<Void> deleteSession(
+            @PathVariable("id") String sessionId,
+            @RequestHeader(value = "X-User-Id", defaultValue = "guest-user-id") String userId) {
         Optional<ChatSession> sessionOpt = sessionRepository.findById(sessionId);
         if (sessionOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
+        ChatSession session = sessionOpt.get();
+        String workspaceId = session.getWorkspaceId();
         sessionRepository.deleteById(sessionId);
         messageRepository.deleteBySessionId(sessionId);
+
+        try {
+            messagingTemplate.convertAndSend("/topic/workspace/" + workspaceId + "/sessions", Map.of(
+                    "action", "DELETE",
+                    "userId", userId,
+                    "sessionId", sessionId
+            ));
+        } catch (Exception ignored) {}
+
         return ResponseEntity.noContent().build();
     }
 }

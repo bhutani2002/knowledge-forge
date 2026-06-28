@@ -31,6 +31,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
             path.startsWith("/api/auth/reset") || 
             path.startsWith("/api/auth/google") ||
             path.startsWith("/api/auth/refresh") ||
+            path.startsWith("/api/auth/health") ||
             path.startsWith("/actuator/") ||
             !path.startsWith("/api/")) {
             return chain.filter(exchange);
@@ -79,10 +80,13 @@ public class AuthFilter implements GlobalFilter, Ordered {
             String role = extractJsonField(payloadJson, "role");
             String email = extractJsonField(payloadJson, "email");
             String tier = extractJsonField(payloadJson, "tier");
+            String displayName = extractJsonField(payloadJson, "displayName");
             
             if (userId == null || role == null) {
                 throw new IllegalArgumentException("Missing claims in token");
             }
+
+            String userName = (displayName != null && !displayName.trim().isEmpty()) ? displayName : (email != null ? email : "User");
 
             // Inject user context headers for downstreams
             ServerHttpRequest mutatedRequest = request.mutate()
@@ -90,6 +94,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
                     .header("X-User-Role", role)
                     .header("X-User-Email", email != null ? email : "")
                     .header("X-User-Tier", tier != null ? tier : "FREE")
+                    .header("X-User-Name", userName)
                     .build();
 
             return chain.filter(exchange.mutate().request(mutatedRequest).build());
@@ -101,7 +106,7 @@ public class AuthFilter implements GlobalFilter, Ordered {
     }
 
     private String extractJsonField(String json, String field) {
-        String pattern = "\"" + field + "\"\\s*:\\s*\"([^\"]+)\"";
+        String pattern = "\"" + field + "\"\\s*:\\s*\"([^\"]*)\"";
         java.util.regex.Pattern r = java.util.regex.Pattern.compile(pattern);
         java.util.regex.Matcher m = r.matcher(json);
         if (m.find()) {

@@ -6,15 +6,17 @@ import DocumentUpload from '../components/DocumentUpload';
 
 const DocumentPage = () => {
   const { t } = useTranslation();
-  const { documents, activeWorkspace, fetchDocuments } = useStore();
+  const { documents, activeWorkspace, fetchDocuments, isAuthenticated } = useStore();
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [docDetails, setDocDetails] = useState(null);
 
   useEffect(() => {
-    fetchDocuments();
-  }, [activeWorkspace]);
+    if (activeWorkspace && (activeWorkspace.id === '00000000-0000-0000-0000-000000000000' || isAuthenticated)) {
+      fetchDocuments();
+    }
+  }, [activeWorkspace, isAuthenticated]);
 
   useEffect(() => {
     let active = true;
@@ -108,7 +110,7 @@ const DocumentPage = () => {
         <Box 
           sx={{ 
             display: 'grid', 
-            gridTemplateColumns: '4fr 1fr', 
+            gridTemplateColumns: '3fr 1.5fr 1fr', 
             px: 2, 
             py: 1.5, 
             bgcolor: 'primary.main',
@@ -117,6 +119,7 @@ const DocumentPage = () => {
           }}
         >
           <Typography variant="caption" sx={{ color: '#ffffff', fontWeight: 600, fontSize: '11px', letterSpacing: '0.05em' }}>{t('name_header').toUpperCase()}</Typography>
+          <Typography variant="caption" sx={{ color: '#ffffff', fontWeight: 600, fontSize: '11px', letterSpacing: '0.05em' }}>{t('uploaded_by_header').toUpperCase()}</Typography>
           <Typography variant="caption" sx={{ color: '#ffffff', fontWeight: 600, fontSize: '11px', letterSpacing: '0.05em' }}>{t('status_header').toUpperCase()}</Typography>
         </Box>
 
@@ -127,7 +130,7 @@ const DocumentPage = () => {
               onClick={() => handleDocClick(doc)}
               sx={{
                 display: 'grid',
-                gridTemplateColumns: '4fr 1fr',
+                gridTemplateColumns: '3fr 1.5fr 1fr',
                 px: 2,
                 py: 2,
                 borderBottom: '1px solid',
@@ -150,6 +153,18 @@ const DocumentPage = () => {
                 }}
               >
                 {doc.originalFilename}
+              </Typography>
+
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  color: 'text.secondary', 
+                  fontSize: '13px', 
+                  fontFamily: 'Inter, sans-serif',
+                  noWrap: true 
+                }}
+              >
+                {doc.uploadedBy || 'System'}
               </Typography>
               
               {/* Status dot indicator */}

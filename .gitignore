@@ -108,5 +108,5 @@ docker-compose.override.yml
 # Presentation and walk-through guides
 *.pptx
 *.ppt
-KnowledgeForge_SS_Video_WalkThrough/
-
+KnowledgeForge_PPT_And_Screen_Shots/
+KnowledgeForge_Video_WalkThrough/

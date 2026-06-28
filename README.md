@@ -6,7 +6,35 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100-teal.svg)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)](https://www.docker.com/)
 
-**KnowledgeForge** is an enterprise-grade, multi-tenant AI Knowledge Platform featuring multi-agent query routing, semantic chunking, high-performance pgvector retrieval, and real-time STOMP WebSocket collaboration. It provides a secure, containerized foundation for organizations to ingest unstructured documents and query them with semantic accuracy, using advanced LLMs (Gemini, Groq, OpenRouter) with built-in fallback mechanisms and compliance controls.
+**KnowledgeForge** is an enterprise-grade, multi-tenant AI Knowledge Platform featuring multi-agent query routing, semantic chunking, high-performance pgvector retrieval, and real-time STOMP WebSocket collaboration. It provides a secure, containerized foundation for organizations to ingest unstructured documents and query them with semantic accuracy, integrating advanced Large Language Models (like Google Gemini, Meta Llama, and Mistral) via high-performance inference engines (like Groq) and fallback gateways (like OpenRouter), complete with built-in compliance controls.
+
+---
+
+## 🎥 Walkthrough Demonstration
+
+Watch the complete feature walkthrough and system integration demonstration:
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/d9fefe95-5940-4fc0-9fc6-b34279872050" width="800" controls preload="metadata">
+    Your browser does not support the video tag. <a href="https://github.com/user-attachments/assets/d9fefe95-5940-4fc0-9fc6-b34279872050">Download the walkthrough video directly here</a>.
+  </video>
+</p>
+
+---
+
+## 💡 The Core Problem & Solution
+
+### ⚠️ The Problem
+Traditional RAG (Retrieval-Augmented Generation) systems are built as **single-player silos**. 
+* **Data Isolation**: Users upload files into private pools, leaving collaborators blind to what data already exists, leading to massive document duplication.
+* **Lack of Governance**: Security policies and access controls are non-existent or hardcoded, allowing cross-tenant data leaks.
+* **Unchecked Outputs**: AI hallucinations go completely unchecked, making it impossible to audit results or establish trace links in high-compliance corporate environments.
+
+### 🛡️ The Solution
+KnowledgeForge resolves these challenges by introducing a **secure, multi-tenant, collaborative RAG platform** built for modern team environments:
+* **Collaborative Sync**: Multi-user rooms synchronize chats, document catalogs, and presence statuses in real-time.
+* **Enterprise Security**: Scoped workspaces partition data at the database layer using strict user validation filters, backed by JWT token rotation and Google OAuth2 SSO.
+* **Audit-Ready Explainability**: A dedicated grounded explainability panel visualizes grounding metrics, similarity scores, and multi-agent trace logs, establishing absolute trust in generated answers.
 
 ---
 
